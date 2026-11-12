@@ -48,16 +48,21 @@ php -v
 | 平台 | 地址 |
 | --- | --- |
 | GitHub | `https://github.com/SunsetReverie/SunsetReverieAPI.git` |
-| Gitee（国内更快） | `https://gitee.com/SunsetReverie/sunset-reverie.git` |
+| Gitee（国内更快） | `https://gitee.com/SunsetReverie/sunset-reverie-api.git` |
 
 ::: tip clone 时指定目录名
-Gitee 的仓库路径是 `sunset-reverie`（全小写带横线），GitHub 是 `SunsetReverie`。
+两个仓库的路径大小写风格不同：
+
+| 平台 | 路径 |
+| --- | --- |
+| GitHub | `SunsetReverie/SunsetReverieAPI` |
+| Gitee | `SunsetReverie/sunset-reverie-api`（仓库名全小写带横线） |
 
 ```bash
-git clone <地址> SunsetReverie      # 显式指定目录名，两边结果一致
+git clone <地址> SunsetReverieAPI      # 显式指定目录名，两边结果一致
 ```
 
-不指定的话，Gitee 会 clone 出 `sunset-reverie/` 目录。
+不指定的话，Gitee 会 clone 出 `sunset-reverie-api/` 目录。
 :::
 
 三种方式，按场景选。
