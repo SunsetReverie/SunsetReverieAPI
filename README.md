@@ -16,7 +16,7 @@
 </div>
 
 ```bash
-git clone https://github.com/SunsetReverie/SunsetReverie.git SunsetReverie && cd SunsetReverie
+git clone https://github.com/SunsetReverie/SunsetReverieAPI.git SunsetReverieAPI && cd SunsetReverieAPI
 php bin/sr new demo && cd demo
 php bin/sr serve
 ```

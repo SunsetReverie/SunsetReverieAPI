@@ -16,7 +16,7 @@
 
 从 `beta.2` 及更早版本升上来：直接替换框架目录即可。
 
-细节见 [CHANGELOG](https://github.com/SunsetReverie/SunsetReverie/blob/main/CHANGELOG.md)。
+细节见 [CHANGELOG](https://github.com/SunsetReverie/SunsetReverieAPI/blob/main/CHANGELOG.md)。
 :::
 
 ---

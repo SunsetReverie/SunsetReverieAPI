@@ -47,7 +47,7 @@ php -v
 
 | 平台 | 地址 |
 | --- | --- |
-| GitHub | `https://github.com/SunsetReverie/SunsetReverie.git` |
+| GitHub | `https://github.com/SunsetReverie/SunsetReverieAPI.git` |
 | Gitee（国内更快） | `https://gitee.com/SunsetReverie/sunset-reverie.git` |
 
 ::: tip clone 时指定目录名
@@ -67,8 +67,8 @@ git clone <地址> SunsetReverie      # 显式指定目录名，两边结果一�
 框架自带 `sr new`，会生成一个可直接运行的项目骨架：
 
 ```bash
-git clone https://github.com/SunsetReverie/SunsetReverie.git SunsetReverie
-cd SunsetReverie
+git clone https://github.com/SunsetReverie/SunsetReverieAPI.git SunsetReverieAPI
+cd SunsetReverieAPI
 php bin/sr new myapp
 cd myapp
 ```
@@ -81,7 +81,7 @@ cd myapp
 
 ```bash
 cd your-project
-git submodule add https://github.com/SunsetReverie/SunsetReverie.git sunsetreverie
+git submodule add https://github.com/SunsetReverie/SunsetReverieAPI.git sunsetreverie
 ```
 
 然后在 `your-project/bin/sr` 放一个转发脚本：
@@ -115,8 +115,8 @@ git -c protocol.file.allow=always submodule update --remote sunsetreverie
 只是想读代码或跑测试：
 
 ```bash
-git clone https://github.com/SunsetReverie/SunsetReverie.git SunsetReverie
-cd SunsetReverie
+git clone https://github.com/SunsetReverie/SunsetReverieAPI.git SunsetReverieAPI
+cd SunsetReverieAPI
 php tests/run.php
 ```
 
