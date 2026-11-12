@@ -48,7 +48,9 @@ jobs:
         # DOCS_BASE 决定所有资源路径的前缀。
         # 项目页部署在 /<仓库名>/ 下，不设这个参数 CSS/JS 会全部 404。
         env:
-          DOCS_BASE: /SunsetReverie/
+          # 仓库已改名为 SunsetReverieAPI（2026-11-12），
+          # 项目页 URL 变成 /SunsetReverieAPI/，前缀必须跟着改。
+          DOCS_BASE: /SunsetReverieAPI/
         run: npm run build
 
       - uses: actions/configure-pages@v5
