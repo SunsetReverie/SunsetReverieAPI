@@ -236,6 +236,64 @@ if (code === 20002) {
 用一个 promise 挡住后续刷新请求，第一个完成后大家共用结果。
 :::
 
+## 在中间件里用
+
+```php
+Route::get('/me', [UserController::class, 'me'])
+    ->middleware(['auth']);          // ✅
+```
+
+`auth` 中间件校验通过后把用户挂到请求上：
+
+```php
+public function me(Request $request): Response
+{
+    $user = $request->attribute('auth.user');   // ?AuthenticatedUser
+
+    return $this->success(['id' => $user?->id]);
+}
+```
+
+控制器里也可以用门面：`Auth::id()` / `Auth::user()`。
+
+不需要登录、但想「有 token 就识别」的接口用 `optional.auth`：
+
+```php
+Route::get('/posts', [PostController::class, 'index'])
+    ->middleware(['optional.auth']);   // 匿名也能看，登录则带上用户
+```
+
+::: warning `auth` 不接受参数
+```php
+->middleware(['auth:admin']);    // ❌ 直接抛异常
+```
+
+```text
+中间件 [...Authenticate] 不接受参数（声明为 auth:admin），请去掉冒号后的内容
+```
+
+**guard 只能从配置来**，不能靠路由参数切换。`Authenticate` 的构造函数是：
+
+```php
+public function __construct(
+    private readonly AuthManager $auth,
+    private readonly ?string $guard = null,   // ← 由容器注入
+) {}
+```
+
+多域项目的鉴权区分不靠 `auth:admin`，靠**域绑定**（下一节）：
+
+```php
+// config/api.php
+'domains' => [
+    'admin' => ['middleware' => ['auth']],
+    'web'   => ['middleware' => ['optional.auth']],
+],
+```
+
+每个域挂自己的鉴权中间件，token 的 `aud` 会拦住跨域使用。
+:::
+
 ## 域绑定（多域项目必读）
 
 **同一个 token 不能跨域使用。**

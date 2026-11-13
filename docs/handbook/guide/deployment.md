@@ -323,7 +323,7 @@ curl https://api.example.com/health
   "message": "success",
   "data": {
     "status": "healthy",
-    "version": "1.0.0-beta.2.3",
+    "version": "1.0.0-beta.2.4",
     "time": "2026-10-31T15:23:01+08:00"
   }
 }

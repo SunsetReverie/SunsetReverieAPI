@@ -304,10 +304,29 @@ final class Builder
     }
 
     /**
-     * 按主键查询，不存在时抛 404。
+     * 按主键查一条，查不到返回 null。
+     *
+     * 与 findOrFail() 对称：后者查不到抛 404，这个静默返回 null，
+     * 由调用方决定怎么处理（展示「不存在」或转成别的错误码）。
+     *
+     * 之前没有这个方法，但文档两处示例（controller.md、cache.md）
+     * 都写了 `->find($id)` —— 照文档写必然 500，而「方法不存在」
+     * 的错误很容易被误判成自己写错了。
      *
      * @param int|string $id 主键值
-     * @param string $primaryKey 主键字段
+     * @param string $primaryKey 主键列名
+     * @return array<string, mixed>|null 找到返回行，否则 null
+     */
+    public function find(int|string $id, string $primaryKey = 'id'): ?array
+    {
+        return $this->where($primaryKey, $id)->first();
+    }
+
+    /**
+     * 按主键查一条，查不到抛 404。
+     *
+     * @param int|string $id 主键值
+     * @param string $primaryKey 主键列名
      * @return array<string, mixed> 记录
      * @throws HttpException 记录不存在时抛出
      */

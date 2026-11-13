@@ -11,6 +11,119 @@
 
 - 待办见文档 18.3.0「当前验收状态」的缺口列表
 
+## [1.0.0-beta.2.4] - 2026-11-13
+
+第二个真实项目（SunsetReverieBlog）开发中暴露的问题。三条代码修复 + 一条文档一致性检查。
+
+### 修复：域级与路由级 `throttle` 叠加导致双计数（重要）
+
+`config/api.php` 给域配了 `middleware => ['throttle:120,60']`，
+路由再挂 `->middleware(['throttle:5,60'])` —— **两个实例都进管线**：
+
+```text
+域中间件通过 Route::group() 继承进每条路由的 middlewareList()
+→ resolve() 把两段都展开
+→ ThrottleRequests 的 resolveKey() 默认是 `{ip}|{route}`
+→ 两个实例算同一个 key，每次请求计数 +2
+```
+
+配 5 次/分钟，实际约 2.5 次就 429。
+
+**修法**：`MiddlewareResolver::resolve()` 按中间件类去重，**同一个类只保留最后一次声明**。
+路由级的声明在列表后面，所以是「路由级覆盖域级」。
+
+代价：同一个中间件类故意挂两次（不同参数）的写法不再支持。
+实际项目里没有合理场景，真要重复执行应该在中间件内部做。
+
+::: warning 只去重还不够
+`resolveRule()` 的优先级是「路由参数 > config 的 ratelimit.routes > default」。
+所以域级仍写 `throttle:120,60` 时，config 里配的 per-route 规则**不会被读到**。
+
+唯一正确的组合：
+
+```php
+// config/api.php —— 域级挂 throttle，但不带参数
+'middleware' => ['throttle'],
+
+// config/ratelimit.php —— 规则全放这里
+'routes' => ['admin.v1.auth.login' => ['max_attempts' => 5, ...]],
+```
+
+还有第三种容易忽略的情况：**域级和路由级都不挂** → `ratelimit.routes` 是死配置，
+一条都不会执行（它需要中间件实例来消费）。
+:::
+
+文档 `ratelimit.md` 补了整节说明，含四种写法的结果对照表。
+
+### 新增：`Builder::find()`
+
+```php
+$post = DB::table('posts')->find($id);        // ?array，查不到返回 null
+$post = DB::table('posts')->findOrFail($id);  // array，查不到抛 404
+```
+
+**这个问题是文档先写了、实现迟迟没有**：
+
+```text
+docs/handbook/guide/controller.md:93   $this->posts->find($id)
+docs/handbook/guide/cache.md:109       DB::table('users')->find(999)
+```
+
+照文档写必然 500，而 `Call to undefined method` 很容易被误判成自己写错了。
+
+与 `findOrFail` 对称：后者把「不存在」当错误直接抛 404，
+而很多场景下查不到是正常分支（「是否已收藏」），用 try/catch 反而绕。
+
+### 新增：五个 Blueprint 列类型
+
+| 方法 | MySQL | PostgreSQL | SQLite |
+| --- | --- | --- | --- |
+| `mediumText()` | `MEDIUMTEXT`（16MB） | `TEXT` | `TEXT` |
+| `longText()` | `LONGTEXT`（4GB） | `TEXT` | `TEXT` |
+| `smallInteger()` | `SMALLINT` | `SMALLINT` | `INTEGER` |
+| `unsignedInteger()` | `INT UNSIGNED` | `INTEGER` | `INTEGER` |
+| `unsignedBigInteger()` | `BIGINT UNSIGNED` | `BIGINT` | `INTEGER` |
+
+背景：`text()` 在 MySQL 只有 **64KB**（约两万字），文章正文很容易超过，
+严格模式下直接 `Data too long` 写入失败。之前只能写原生 `ALTER TABLE` 绕过。
+
+顺带把类型占位符抽成 `TYPE_PLACEHOLDERS` 常量——原来三处 `str_replace`
+各写一遍字面量数组，加一个类型要改三处，容易漏。
+
+无符号类型只在 MySQL 生效，PG / SQLite 会退化成普通整数（它们本来就没有无符号）。
+
+### 新增：文档示例的调用校验
+
+FW-001 的本质是「文档写了、实现没有」。已有的 `DocsConsistencyTest`
+只检查了命令、错误码、配置键、门面方法，**没覆盖 Query Builder**。
+
+新增 `testDocumentedBuilderMethodsExist`：扫描文档里 `DB::table(...)` 开头的调用链，
+提取所有 `->method(`，对照 `Builder` 的公开方法。
+
+反向验证过：把示例改成 `->findByEmail()`，测试立刻报
+`docs/handbook/guide/cache.md 里的 ->findByEmail()`。
+
+只检查 `DB::table(` 链——`$this->posts->find()` 这种变量接收者的调用
+无法静态判断类型，不在范围内。
+
+### 文档
+
+| 文档 | 补了什么 |
+| --- | --- |
+| `database.md` | 新增「按主键取一条」，讲 `find` 与 `findOrFail` 的分工 |
+| `migration.md` | 列类型表补 5 个；新增 `text()` 64KB 与无符号类型的警告 |
+| `ratelimit.md` | 新增「域级与路由级同时挂 throttle」，含四种写法对照表 |
+| `auth.md` | 新增「在中间件里用」，说明 `auth:admin` 会报错、guard 只能从配置来 |
+
+### 校验
+
+```text
+402 用例 / 1061 断言    通过（+3）
+PHPStan level 8          零错误
+架构检查 8 项             全过
+文档构建                 0 dead link
+```
+
 ## [1.0.0-beta.2.3] - 2026-11-05
 
 为「个人图床」类项目补两个能力。都是纯增量，不改既有行为。

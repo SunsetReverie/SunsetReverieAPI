@@ -93,6 +93,44 @@ $name = DB::scalar('SELECT name FROM users WHERE id = ?', [$id]);
 
 没查到返回 `null`。
 
+## 按主键取一条
+
+两个方法，区别只在「查不到怎么办」：
+
+```php
+$post = DB::table('posts')->find($id);        // ?array，查不到返回 null
+$post = DB::table('posts')->findOrFail($id);  // array，查不到抛 404
+```
+
+| 方法 | 查不到时 | 适合 |
+| --- | --- | --- |
+| `find($id, $primaryKey = 'id')` | 返回 `null` | 调用方要自己处理「不存在」 |
+| `findOrFail($id, $primaryKey = 'id')` | 抛 `HttpException`（404 + 错误码 `40001`） | 不存在就该 404 的接口 |
+
+```php
+// 展示页：不存在时给自定义文案
+$post = DB::table('posts')->find($id);
+
+if ($post === null) {
+    throw new PostException('文章不存在或已删除', 404);
+}
+
+// 管理接口：422/404 由框架统一出
+$post = DB::table('posts')->findOrFail($id);
+```
+
+主键列名不是 `id` 时传第二个参数：
+
+```php
+DB::table('users')->find($uuid, 'uuid');
+```
+
+::: tip 为什么有 `find` 还需要 `findOrFail`
+不是重复。`findOrFail` 把「不存在」当成错误直接抛 404，
+而很多场景下「查不到」是正常分支（比如「你已经收藏过吗」），
+用 try/catch 反而绕。
+:::
+
 ## 查询条件
 
 ### `where` 只认 9 个运算符

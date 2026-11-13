@@ -111,21 +111,46 @@ near "group": syntax error   ← 报错发生在 INSERT，很容易误判成 SQL
 
 ## 列类型
 
-17 个方法：
+16 个方法：
 
-| 方法 | 参数 | 说明 |
-| --- | --- | --- |
-| `id()` | — | 自增主键（BIGINT） |
-| `string($name, $length = 255)` | 列名、长度 | VARCHAR |
-| `text($name)` | 列名 | TEXT |
-| `integer($name)` | 列名 | INT |
-| `bigInteger($name)` | 列名 | BIGINT |
-| `boolean($name)` | 列名 | 三库映射不同（见下） |
-| `json($name)` | 列名 | MySQL `JSON` / PG `JSONB` / SQLite `TEXT` |
-| `timestamp($name)` | 列名 | 时间戳 |
-| `date($name)` | 列名 | 日期 |
-| `decimal($name, $precision = 10, $scale = 2)` | 精度、小数位 | 金额用它 |
-| `timestamps()` | — | 一次加 `created_at` + `updated_at` |
+| 方法 | 参数 | MySQL 类型 | 说明 |
+| --- | --- | --- | --- |
+| `id()` | — | BIGINT AUTO_INCREMENT | 自增主键 |
+| `string($name, $length = 255)` | 列名、长度 | VARCHAR | |
+| `text($name)` | 列名 | **TEXT（64KB）** | 短文本 |
+| `mediumText($name)` | 列名 | **MEDIUMTEXT（16MB）** | 文章正文、邮件模板 |
+| `longText($name)` | 列名 | **LONGTEXT（4GB）** | 超大文本 |
+| `integer($name)` | 列名 | INT | |
+| `bigInteger($name)` | 列名 | BIGINT | |
+| `smallInteger($name)` | 列名 | SMALLINT | 状态位、评分 |
+| `unsignedInteger($name)` | 列名 | INT UNSIGNED | 计数类 |
+| `unsignedBigInteger($name)` | 列名 | BIGINT UNSIGNED | 外部 ID、雪花 ID |
+| `boolean($name)` | 列名 | TINYINT(1) | 三库映射不同（见下） |
+| `json($name)` | 列名 | JSON | PG `JSONB` / SQLite `TEXT` |
+| `timestamp($name)` | 列名 | DATETIME | |
+| `date($name)` | 列名 | DATE | |
+| `decimal($name, $precision = 10, $scale = 2)` | 精度、小数位 | DECIMAL | 金额用它 |
+| `timestamps()` | — | — | 一次加 `created_at` + `updated_at` |
+
+::: warning `text()` 在 MySQL 只有 64KB
+`TEXT` 的上限是 65535 字节，中文按 UTF-8 约 3 字节/字——**两万字左右就满了**。
+
+超长时 MySQL 严格模式直接报错：
+
+```text
+Data too long for column 'content' at row 1
+```
+
+文章正文、富文本、邮件模板这类字段用 `mediumText()`（16MB）。
+PostgreSQL / SQLite 的 `TEXT` 本身没有长度上限，三者都会映射成 `TEXT`，不需要区分。
+:::
+
+::: tip 无符号只在 MySQL 生效
+`unsignedInteger()` / `unsignedBigInteger()` 在 PostgreSQL / SQLite 上**退化成普通整数**——
+那两个数据库本来就没有无符号类型。
+
+需要「不允许负数」的强约束时，得在应用层校验，或者用原生 SQL 加 `CHECK` 约束。
+:::
 
 ### 三库的类型映射
 
@@ -136,6 +161,10 @@ near "group": syntax error   ← 报错发生在 INSERT，很容易误判成 SQL
 | `boolean()` | `TINYINT(1)` | `BOOLEAN` | `INTEGER` |
 | `json()` | `JSON` | `JSONB` | `TEXT` |
 | `id()` | `BIGINT AUTO_INCREMENT` | `BIGSERIAL` | `INTEGER AUTOINCREMENT` |
+| `mediumText()` / `longText()` | `MEDIUMTEXT` / `LONGTEXT` | `TEXT` | `TEXT` |
+| `smallInteger()` | `SMALLINT` | `SMALLINT` | `INTEGER` |
+| `unsignedInteger()` | `INT UNSIGNED` | `INTEGER` | `INTEGER` |
+| `unsignedBigInteger()` | `BIGINT UNSIGNED` | `BIGINT` | `INTEGER` |
 
 详见[多数据库](./multi-database)。
 

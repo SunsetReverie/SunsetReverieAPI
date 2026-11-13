@@ -167,7 +167,7 @@ php bin/sr about | grep 版本
 
 # 2. 下载新版 ZIP，解压到临时目录
 #    注意：解压出来的目录名取决于下载来源
-#    （GitHub 的 main 分支是 SunsetReverie-main，tag 是小写的 sunsetreverie-1.0.0-beta.2.3）
+#    （GitHub 的 main 分支是 SunsetReverie-main，tag 是小写的 sunsetreverie-1.0.0-beta.2.4）
 unzip SunsetReverie-*.zip -d /tmp/sr-new
 
 # 3. 用通配符找出实际目录，避免写死名字

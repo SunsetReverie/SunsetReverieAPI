@@ -24,6 +24,25 @@ final class Blueprint
     private array $indexes = [];
 
     /**
+     * 类型占位符 → 各驱动的真实类型。
+     *
+     * 顺序必须与 toSql() 里三个替换数组严格一致。抽成常量是因为
+     * 之前这些字面量在三个分支里各写一遍，加一个类型要改三处，容易漏。
+     *
+     * @var list<string>
+     */
+    private const TYPE_PLACEHOLDERS = [
+        '__BOOL__',
+        '__TIMESTAMP__',
+        '__JSON__',
+        '__MEDIUMTEXT__',
+        '__LONGTEXT__',
+        '__SMALLINT__',
+        '__UNSIGNED_INT__',
+        '__UNSIGNED_BIGINT__',
+    ];
+
+    /**
      * @param string $table 表名
      */
     public function __construct(private readonly string $table)
@@ -67,6 +86,33 @@ final class Blueprint
     }
 
     /**
+     * 中等长度文本。
+     *
+     * MySQL 的 `TEXT` 只有 64KB，文章正文、邮件模板很容易超过——
+     * 严格模式下写入会直接失败。`MEDIUMTEXT` 是 16MB。
+     *
+     * PostgreSQL / SQLite 的 `TEXT` 本身没有长度上限，映射成 `TEXT` 即可。
+     *
+     * @param string $name 列名
+     * @return self 当前实例
+     */
+    public function mediumText(string $name): self
+    {
+        return $this->addColumn($name, '__MEDIUMTEXT__');
+    }
+
+    /**
+     * 长文本（MySQL `LONGTEXT`，4GB）。
+     *
+     * @param string $name 列名
+     * @return self 当前实例
+     */
+    public function longText(string $name): self
+    {
+        return $this->addColumn($name, '__LONGTEXT__');
+    }
+
+    /**
      * 整数列。
      *
      * @param string $name 列名
@@ -86,6 +132,46 @@ final class Blueprint
     public function bigInteger(string $name): self
     {
         return $this->addColumn($name, 'BIGINT');
+    }
+
+    /**
+     * 小整数（MySQL `SMALLINT`，±32767）。
+     *
+     * 适合状态位、评分、数量这类不会大的字段——比 `INTEGER` 省一半空间。
+     *
+     * @param string $name 列名
+     * @return self 当前实例
+     */
+    public function smallInteger(string $name): self
+    {
+        return $this->addColumn($name, '__SMALLINT__');
+    }
+
+    /**
+     * 无符号整数（MySQL `INT UNSIGNED`）。
+     *
+     * 注意：只有 MySQL 支持无符号。PostgreSQL / SQLite 会退化成普通整数，
+     * 需要非负约束时应在应用层校验或加 CHECK。
+     *
+     * @param string $name 列名
+     * @return self 当前实例
+     */
+    public function unsignedInteger(string $name): self
+    {
+        return $this->addColumn($name, '__UNSIGNED_INT__');
+    }
+
+    /**
+     * 无符号大整数（MySQL `BIGINT UNSIGNED`）。
+     *
+     * 适合外部 ID、雪花 ID 这类只增不减的值。
+     *
+     * @param string $name 列名
+     * @return self 当前实例
+     */
+    public function unsignedBigInteger(string $name): self
+    {
+        return $this->addColumn($name, '__UNSIGNED_BIGINT__');
     }
 
     /**
@@ -358,18 +444,18 @@ final class Blueprint
 
             $column = match ($driver) {
                 'pgsql' => str_replace(
-                    ['__BOOL__', '__TIMESTAMP__', '__JSON__'],
-                    ['BOOLEAN', 'TIMESTAMP', 'JSONB'],
+                    self::TYPE_PLACEHOLDERS,
+                    ['BOOLEAN', 'TIMESTAMP', 'JSONB', 'TEXT', 'TEXT', 'SMALLINT', 'INTEGER', 'BIGINT'],
                     $column
                 ),
                 'sqlite' => str_replace(
-                    ['__BOOL__', '__TIMESTAMP__', '__JSON__'],
-                    ['INTEGER', 'DATETIME', 'TEXT'],
+                    self::TYPE_PLACEHOLDERS,
+                    ['INTEGER', 'DATETIME', 'TEXT', 'TEXT', 'TEXT', 'INTEGER', 'INTEGER', 'INTEGER'],
                     $column
                 ),
                 default => str_replace(
-                    ['__BOOL__', '__TIMESTAMP__', '__JSON__'],
-                    ['TINYINT(1)', 'DATETIME', 'JSON'],
+                    self::TYPE_PLACEHOLDERS,
+                    ['TINYINT(1)', 'DATETIME', 'JSON', 'MEDIUMTEXT', 'LONGTEXT', 'SMALLINT', 'INT UNSIGNED', 'BIGINT UNSIGNED'],
                     $column
                 ),
             };

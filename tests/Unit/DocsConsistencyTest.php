@@ -397,6 +397,132 @@ final class DocsConsistencyTest extends TestCase
     }
 
     /**
+     * 文档示例里 `DB::table(...)` 之后调用的方法必须真实存在。
+     *
+     * 这就是 FW-001 那类问题的自动化兜底：文档写了 `->find($id)`，
+     * 而 Builder 里只有 `findOrFail`，照文档写必然 500，
+     * 且报错是「方法不存在」——很容易被当成自己写错了。
+     *
+     * 只检查 `DB::table(` 开头的链：那是明确的 Builder 调用，
+     * 不会把其他对象的方法误判进来。`$this->posts->find()` 这种
+     * 变量接收者的调用无法静态判断类型，不在检查范围。
+     *
+     * @return void
+     */
+    public function testDocumentedBuilderMethodsExist(): void
+    {
+        if (!$this->hasDocs()) {
+            return;
+        }
+
+        $builder = $this->buildersPublicMethods();
+
+        if ($builder === []) {
+            $this->fail('没解析到 Builder 的任何方法，源码路径可能变了');
+        }
+
+        /*
+         * 这几个不是 Builder 的方法，但会出现在链里：
+         *   ->toArray()   结果数组
+         *   ->json()      响应
+         * 逐个确认后加入白名单，避免误报。
+         */
+        $allowed = ['toArray', 'json', 'each', 'map', 'filter', 'count', 'isEmpty', 'method'];
+
+        $bad = [];
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($this->docsDir, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'md') {
+                continue;
+            }
+
+            /*
+             * changelog.md 是 CHANGELOG.md 的自动镜像，里面会出现
+             * 「举反例」的代码片段（比如展示某个曾经不存在的方法），
+             * 不是真实的文档示例，跳过。
+             */
+            if ($file->getFilename() === 'changelog.md') {
+                continue;
+            }
+
+            $lines = explode("\n", (string) file_get_contents($file->getPathname()));
+            $rel = str_replace(dirname($this->docsDir) . '/', '', $file->getPathname());
+
+            $inChain = false;
+            $chain = '';
+
+            foreach ($lines as $line) {
+                // 链开始：本行出现 DB::table(
+                if (!$inChain && str_contains($line, 'DB::table(')) {
+                    $inChain = true;
+                    $chain = '';
+                }
+
+                if (!$inChain) {
+                    continue;
+                }
+
+                $chain .= $line . "\n";
+
+                // 链结束：分号 / 行尾没有续行符
+                if (str_contains($line, ';') || str_contains($line, '```')) {
+                    $inChain = false;
+
+                    /*
+                     * 排除 `$this->method()`：那多半出现在链的参数里
+                     * （比如 insert([... 'total' => $this->formatCents($x)])），
+                     * 不是 Builder 的方法。
+                     */
+                    preg_match_all('/(?<!\$this)->([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/', $chain, $m);
+
+                    foreach (array_unique($m[1]) as $method) {
+                        if (in_array($method, $allowed, true)) {
+                            continue;
+                        }
+
+                        if (!in_array($method, $builder, true)) {
+                            $bad[] = sprintf('%s 里的 ->%s()', $rel, $method);
+                        }
+                    }
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $bad,
+            "文档示例调用了 Builder 上不存在的方法：\n  " . implode("\n  ", array_unique($bad))
+            . "\n\n要么补上这个方法，要么改文档——照文档写会直接 500。"
+        );
+    }
+
+    /**
+     * Builder 的公开方法名列表。
+     *
+     * @return list<string>
+     */
+    private function buildersPublicMethods(): array
+    {
+        $path = dirname(__DIR__, 2) . '/components/database/src/Query/Builder.php';
+
+        if (!is_file($path)) {
+            return [];
+        }
+
+        preg_match_all(
+            '/public function ([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/',
+            (string) file_get_contents($path),
+            $m
+        );
+
+        return array_values(array_unique($m[1]));
+    }
+
+    /**
      * 文档里写的测试用例数必须等于实际数量。
      *
      * 这个数字硬编码在 README、首页、install.md 里，每次加测试都会过期。

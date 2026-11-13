@@ -109,6 +109,71 @@ Route::post('/login', [AuthController::class, 'login'], 'auth.login')
 足够让攻击者放弃。
 :::
 
+## 域级与路由级同时挂 throttle
+
+`config/api.php` 可以给整个域配中间件，路由又能自己再挂一次。这里有个坑：
+
+```php
+// config/api.php
+'admin' => ['middleware' => ['throttle:120,60']],      // 域级
+
+// routes/admin/v1/auth.php
+Route::post('/login', ...)->middleware(['throttle:5,60']);   // 路由级
+```
+
+**两个声明都会进管线**（域级通过 `Route::group()` 继承进每条路由的 `middlewareList()`）。
+
+`ThrottleRequests` 的计数键默认是 `{ip}|{route}` —— 两个实例算**同一个 key**，
+于是每次请求计数 **+2**：配 5 次/分钟实际约 2.5 次就 429。
+
+::: tip 1.0.0-beta.2.4 起已修
+`MiddlewareResolver` 现在按中间件类去重，**同一个类只保留最后一次声明**。
+路由级的声明在列表后面，所以是「路由级覆盖域级」，不再双计数。
+
+去重的代价：同一个中间件类**故意**挂两次（不同参数）的写法不再支持。
+:::
+
+但**只去重还不够**，参数优先级仍然要注意：
+
+```php
+// resolveRule() 的实际优先级
+//   ① 路由上的参数（throttle:5,60）
+//   ② config 的 ratelimit.routes
+//   ③ config 的 ratelimit.default
+```
+
+所以如果域级写的是 `throttle:120,60`，`resolveRule()` 在 ① 就返回了，
+**`ratelimit.routes` 里配的规则根本不会被读到**。
+
+### 唯一正确的组合
+
+```php
+// config/api.php —— 域级挂 throttle，但**不带参数**
+'admin' => [
+    'middleware' => ['throttle'],
+],
+
+// config/ratelimit.php —— 具体规则全放这里
+'routes' => [
+    'admin.v1.auth.login' => ['max_attempts' => 5,   'decay_seconds' => 60],
+    'admin.v1.auth.*'     => ['max_attempts' => 10,  'decay_seconds' => 60],
+    'admin.*'             => ['max_attempts' => 120, 'decay_seconds' => 60],
+],
+```
+
+| 写法 | 结果 |
+| --- | --- |
+| 域级 `throttle`（无参）+ config 配规则 | ✅ 规则生效，只计数一次 |
+| 域级 `throttle:120,60` + config 配规则 | ❌ config 规则被忽略，全部走 120/60 |
+| 域级和路由级都不挂 | ❌ **完全不限流**（config 规则没有实例去读） |
+| 域级 `throttle:120,60` + 路由级 `throttle:5,60` | ⚠️ 去重后只用 5/60，但 config 规则仍被忽略 |
+
+::: warning 第三种最容易忽略
+`ratelimit.routes` 不是「自动生效的配置」，它需要一个 `throttle` 中间件实例来消费。
+
+路由和域级都不挂 `throttle` 时，那份配置是**死配置**——一条都不会执行。
+:::
+
 ## 按路由名配置
 
 不想在每个路由上写参数时，写进配置：

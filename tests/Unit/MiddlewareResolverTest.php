@@ -134,6 +134,60 @@ final class MiddlewareResolverTest extends TestCase
      *
      * @return \SunsetReverie\Container\Container 容器
      */
+    /**
+     * 同一个中间件类只保留最后一次声明。
+     *
+     * 域级 middleware 会通过 Route::group() 继承进每条路由的 middlewareList()，
+     * 路由自己又可能再声明一次。加去重前会得到两个实例、都进管线：
+     *
+     *   config/api.php  'middleware' => ['throttle:120,60']
+     *   routes/...      ->middleware(['throttle:5,60'])
+     *
+     * ThrottleRequests 的 key 是 `{ip}|{route}`，两个实例算同一个 key，
+     * 于是每次请求计数 +2 —— 配 5 次/分钟实际 2.5 次就 429。
+     *
+     * @return void
+     */
+    public function testSameMiddlewareClassIsDeduplicated(): void
+    {
+        $resolver = new MiddlewareResolver($this->app(), ['throttle' => ParameterizedMiddleware::class]);
+
+        $resolved = $resolver->resolve(['throttle:120,60', 'throttle:5,60']);
+
+        $this->assertSame(1, count($resolved), '同一中间件类应只保留一个实例');
+
+        $first = $resolved[0];
+
+        if (!$first instanceof ParameterizedMiddleware) {
+            $this->fail('保留的实例类型不对');
+        }
+
+        $this->assertSame(
+            ['5', '60'],
+            $first->parameters,
+            '应保留最后一次（路由级）的参数，即路由级覆盖域级'
+        );
+    }
+
+    /**
+     * 去重不能误伤：不同中间件类都要保留，顺序不变。
+     *
+     * @return void
+     */
+    public function testDifferentMiddlewareClassesAreKept(): void
+    {
+        $resolver = new MiddlewareResolver($this->app(), [
+            'stub' => StubMiddleware::class,
+            'throttle' => ParameterizedMiddleware::class,
+        ]);
+
+        $resolved = $resolver->resolve(['stub', 'throttle:5,60', 'stub']);
+
+        $this->assertSame(2, count($resolved), '两个不同类应都保留');
+        $this->assertTrue($resolved[0] instanceof StubMiddleware);
+        $this->assertTrue($resolved[1] instanceof ParameterizedMiddleware);
+    }
+
     private function app(): \SunsetReverie\Container\Container
     {
         $container = new \SunsetReverie\Container\Container();

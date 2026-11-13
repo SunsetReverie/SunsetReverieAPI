@@ -43,13 +43,54 @@ final class MiddlewareResolver
     {
         $resolved = [];
 
+        /** @var array<class-string, int> 类名 => 在 $resolved 里的下标 */
+        $positions = [];
+
         foreach ($middleware as $item) {
-            $resolved[] = is_string($item)
+            $instance = is_string($item)
                 ? $this->resolveOne($item, $domainAliases)
                 : $item;
+
+            /*
+             * 闭包（callable）不参与去重：没有稳定的类名语义，
+             * 两个闭包即使「看起来一样」也是不同的实例。
+             */
+            if (!is_object($instance) || $instance instanceof \Closure) {
+                $resolved[] = $instance;
+
+                continue;
+            }
+
+            $class = $instance::class;
+
+            /*
+             * 同一个中间件类只保留**最后一次**声明。
+             *
+             * 为什么必须去重：域级 middleware 会通过 Route::group() 继承进
+             * 每条路由的 middlewareList()，而路由自己又可能再声明一次。
+             * 于是 `throttle:120,60`（域级）+ `throttle:5,60`（路由级）
+             * 会产生两个实例、都进管线、都执行。
+             *
+             * ThrottleRequests 的 resolveKey() 默认是 `{ip}|{route}`，
+             * 两个实例计数的是同一个 key —— 一次请求 +2，实际可用额度减半。
+             *
+             * 后面的声明来自路由（更具体），保留它即「路由级覆盖域级」。
+             *
+             * 代价：同一个中间件类**故意**要挂两次（不同实例）的写法不再支持。
+             * 这种情况在实际项目里没有合理场景，真要重复执行应该在中间件内部做。
+             */
+            if (isset($positions[$class])) {
+                $resolved[$positions[$class]] = $instance;
+
+                continue;
+            }
+
+            $positions[$class] = count($resolved);
+            $resolved[] = $instance;
         }
 
-        return $resolved;
+        // array_values 保证返回 list（去重时用下标覆盖过，键可能不连续）
+        return array_values($resolved);
     }
 
     /**
